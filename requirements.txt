@@ -1,0 +1,4 @@
+pymupdf
+pandas
+tqdm
+scikit-learn
