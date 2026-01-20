@@ -1,0 +1,86 @@
+import os
+import re
+import fitz  # PyMuPDF
+from tqdm import tqdm
+
+# =========================
+# CONFIG
+# =========================
+PDF_DIR = r"C:\NLP\Briefly_FullPaper\data\data_raw_pdfs"     # <-- CHANGE THIS
+OUT_DIR = r"data\processed\extracted"
+
+MAX_PDFS = 1500       # process only first 1500 PDFs
+MAX_PAGES = None      # None = full paper
+LOG_EVERY = 100
+
+# =========================
+# HELPERS
+# =========================
+def clean_text(text: str) -> str:
+    text = text.replace("\x00", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+def extract_pdf_full_text(pdf_path: str, max_pages=None) -> str:
+    doc = fitz.open(pdf_path)
+    pages = range(len(doc)) if max_pages is None else range(min(len(doc), max_pages))
+    parts = []
+    for i in pages:
+        parts.append(doc.load_page(i).get_text("text"))
+    return clean_text("\n".join(parts))
+
+def extract_folder():
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    pdf_files = sorted([
+        f for f in os.listdir(PDF_DIR)
+        if f.lower().endswith(".pdf")
+    ])[:MAX_PDFS]
+
+    attempted = saved = skipped_short = failed = 0
+
+    print(f"🚀 Starting extraction")
+    print(f"📂 PDF_DIR: {PDF_DIR}")
+    print(f"📁 OUT_DIR: {OUT_DIR}")
+    print(f"📄 Max PDFs: {MAX_PDFS}")
+    print("-" * 40)
+
+    for fname in tqdm(pdf_files, desc="Extracting PDFs"):
+        attempted += 1
+        in_path = os.path.join(PDF_DIR, fname)
+        out_path = os.path.join(OUT_DIR, fname.replace(".pdf", ".txt"))
+
+        if os.path.exists(out_path):
+            continue
+
+        try:
+            text = extract_pdf_full_text(in_path, max_pages=MAX_PAGES)
+
+            if len(text) < 500:
+                skipped_short += 1
+                continue
+
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(text)
+
+            saved += 1
+
+        except Exception as e:
+            failed += 1
+
+        if attempted % LOG_EVERY == 0:
+            print(f"✅ Attempted {attempted} | Saved {saved} | Skipped(short) {skipped_short} | Failed {failed}")
+
+    print("\n==============================")
+    print(f"✅ DONE")
+    print(f"Attempted: {attempted}")
+    print(f"Saved: {saved}")
+    print(f"Skipped(short): {skipped_short}")
+    print(f"Failed: {failed}")
+    print("==============================")
+
+# =========================
+# MAIN
+# =========================
+if __name__ == "__main__":
+    extract_folder()
